@@ -53,13 +53,29 @@ module.exports = {
                 .setColor('Yellow')
                 .setTimestamp();
 
+            try {
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('⚠️ Você recebeu uma advertência')
+                    .setDescription(`${target.username} você recebeu uma advertência no servidor **${interaction.guild.name}**.`)
+                    .addFields(
+                        { name: 'Motivo', value: reason },
+                        { name: 'Moderador', value: interaction.user.tag }
+                    )
+                    .setColor('Red')
+                    .setTimestamp();
+
+                await target.send({ embeds: [dmEmbed] });
+            } catch (_error) {
+                console.log(`⚠️ Não foi possivel enviar a mensagem para ${target.tag}`);
+            }
+
             return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'list') {
             const userData = await GuildUser.findOne({ guildId: guildId, userId: target.id });
 
-            if (!userData || userData.warnings.length === 0) {
+            if (!userData || !userData.warnings || userData.warnings.length === 0) {
                 return interaction.reply({ 
                     content: `O Membro ${target.tag} não possui advertências.`, 
                     flags: MessageFlags.Ephemeral 
@@ -67,15 +83,15 @@ module.exports = {
             }
 
             // Mapear as advertências para uma string legível
-            const history = userData.warnings
-                .map((w, i) => `**${i + 1}.** Por: <@${w.moderatorId}> | Motivo: *${w.reason}*`)
-                .join('\n');
-
             const listEmbed = new EmbedBuilder()
-                .setTitle(`Histórico de: ${target.username}`)
-                .setDescription(history)
-                .setColor('Blue')
-                .setFooter({ text: `ID do Membro: ${target.id}` });
+                .setTitle(`Avisos de: ${target.username}`)
+                .setColor('Red')
+                .setDescription(userData.warnings.map((w, i) => {
+                    const modMention = w.moderatorId ? `<@${w.moderatorId}>` : 'Desconhecido';
+                    const warnDate = w.date ? `<t:${Math.floor(w.date.getTime() / 1000)}:R>` : 'Desconhecido';
+
+                    return `**ID: #${i + 1}**\n**Motivo:** ${w.reason}\n**Moderador:** ${modMention}\n**Data:** ${warnDate}`;
+                }).join('\n\n'));
 
             return interaction.reply({ embeds: [listEmbed] });
         }

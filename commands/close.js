@@ -15,18 +15,23 @@ module.exports = {
         const channel = interaction.channel;
         const guildId = interaction.guild.id;
 
-        // Verificação de se o canal é um ticket
-        const userData = await GuildUser.findOne({ guildId: guildId, activeTicket: channel.id });
+        const userData = await GuildUser.findOne({ guildId: guildId, activateTicket: channel.id });
 
         if (!userData) {
-            return interaction.reply({ 
-                content: 'Esse canal não é um ticket registrado no sistema.', 
-                flags: MessageFlags.Ephemeral 
-            });
+            if (!channel.name.startsWith('ticket-')) {
+                return interaction.reply({ 
+                    content: 'Esse canal não é um ticket registrado no sistema.', 
+                    flags: MessageFlags.Ephemeral 
+                });
+            }
+            // Se o canal não estiver na Database o moderador poderá deletar
+            if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+                return interaction.reply({ content: 'Apenas moderadores podem fechar tickets não registrados.', flags: MessageFlags.Ephemeral });
+            }
         }
 
-        // Verificação de permissões (Se a pessoa pode fechar o ticket)
-        const isOwner = userData.userId === interaction.user.id;
+        // Verificação de permissões
+        const isOwner = userData?.userId === interaction.user.id;
         const isMod = interaction.member.permissions.has(PermissionFlagsBits.ManageChannels);
 
         if (!isOwner && !isMod) {
@@ -37,17 +42,17 @@ module.exports = {
         }
 
         try {
-            // activeTicket = null (Permitir a abertura de um novo ticket)
-            await GuildUser.findOneAndUpdate(
-                { guildId: guildId, userId: userData.userId },
-                { activeTicket: null }
-            );
+            if (userData) {
+                await GuildUser.findOneAndUpdate(
+                    { guildId: guildId, userId: userData.userId },
+                    { $unset: { activateTicket: "" } }
+                );
+            }
 
-            await interaction.reply('Apagando o ticket em 5 segundos...');
+            await interaction.reply('🔒 O ticket será fechado e deletado em 5 segundos...');
 
-            // Pequeno atraso para o usuário ler as ultimas mensagens do ticket
             setTimeout(async () => {
-                await channel.delete().catch(() => null);
+                await channel.delete().catch(err => console.error("Erro ao apagar canal:", err));
             }, 5000);
 
         } catch (error) {
